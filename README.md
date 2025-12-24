@@ -695,6 +695,102 @@ for (const allowance of status.erc20Allowances) {
 }
 ```
 
+### ArbitrageService - Real-time Arbitrage Detection & Execution
+
+Automated arbitrage monitoring using WebSocket for real-time orderbook updates.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ArbitrageService 套利策略                                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Long Arb:  effectiveBuyYes + effectiveBuyNo < $1                           │
+│             → Buy YES + NO → Merge → $1 USDC                                │
+│                                                                             │
+│  Short Arb: effectiveSellYes + effectiveSellNo > $1                         │
+│             → Sell pre-held YES + NO tokens → > $1 USDC                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+```typescript
+import { ArbitrageService } from '@catalyst-team/poly-sdk';
+
+// Initialize service
+const arbService = new ArbitrageService({
+  privateKey: process.env.POLY_PRIVKEY,
+  profitThreshold: 0.005,  // 0.5% minimum profit
+  minTradeSize: 5,         // $5 minimum
+  maxTradeSize: 100,       // $100 maximum
+  autoExecute: true,       // Automatically execute opportunities
+});
+
+// Define market to monitor
+const market = {
+  name: 'Will BTC reach $100k?',
+  conditionId: '0x...',
+  yesTokenId: '12345...',  // From CLOB API
+  noTokenId: '67890...',
+  outcomes: ['Yes', 'No'] as [string, string],
+};
+
+// Listen for opportunities
+arbService.on('opportunity', (opp) => {
+  console.log(`${opp.type.toUpperCase()} ARB: ${opp.profitPercent.toFixed(2)}%`);
+  console.log(`Size: ${opp.recommendedSize}, Est Profit: $${opp.estimatedProfit.toFixed(2)}`);
+});
+
+// Listen for execution results
+arbService.on('execution', (result) => {
+  if (result.success) {
+    console.log(`✅ Executed: $${result.profit.toFixed(2)} profit in ${result.executionTimeMs}ms`);
+  } else {
+    console.log(`❌ Failed: ${result.error}`);
+  }
+});
+
+// Start monitoring
+await arbService.start(market);
+
+// ... later
+await arbService.stop();
+console.log(arbService.getStats()); // { opportunitiesDetected, executionsSucceeded, totalProfit }
+```
+
+**Manual Execution Mode:**
+
+```typescript
+// Initialize without autoExecute
+const arbService = new ArbitrageService({
+  privateKey: process.env.POLY_PRIVKEY,
+  autoExecute: false,  // Manual mode
+});
+
+await arbService.start(market);
+
+// Check for opportunity
+const opportunity = arbService.checkOpportunity();
+if (opportunity && opportunity.profitPercent > 1.0) {
+  // Execute manually with custom logic
+  const result = await arbService.execute(opportunity);
+}
+```
+
+**Monitor-only Mode (no wallet):**
+
+```typescript
+// No private key = monitoring only
+const arbService = new ArbitrageService({
+  profitThreshold: 0.003,
+  enableLogging: true,
+});
+
+arbService.on('opportunity', (opp) => {
+  // Log opportunities without executing
+  console.log(`Found: ${opp.description}`);
+});
+
+await arbService.start(market);
+```
+
 ## Price Utilities
 
 ```typescript
@@ -816,6 +912,14 @@ import type {
   AllowanceInfo,
   AllowancesResult,
   ApprovalTxResult,
+
+  // ArbitrageService
+  ArbitrageMarketConfig,
+  ArbitrageServiceConfig,
+  ArbitrageServiceOpportunity,
+  ArbitrageExecutionResult,
+  OrderbookState,
+  BalanceState,
 
   // Price Utils
   TickSize,

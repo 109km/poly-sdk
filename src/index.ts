@@ -60,8 +60,17 @@ export type { WebSocketManagerConfig, WebSocketManagerEvents } from './clients/w
 export { RealtimeService } from './services/realtime-service.js';
 export type { Subscription, MarketSubscriptionHandlers } from './services/realtime-service.js';
 
-// NOTE: ArbitrageService has been moved to @catalyst-team/arb package
-// See packages/arb/src/services/arbitrage-service.ts
+// ArbitrageService (Real-time arbitrage detection and execution)
+export { ArbitrageService } from './services/arbitrage-service.js';
+export type {
+  ArbitrageMarketConfig,
+  ArbitrageServiceConfig,
+  ArbitrageOpportunity as ArbitrageServiceOpportunity,
+  ArbitrageExecutionResult,
+  ArbitrageServiceEvents,
+  OrderbookState,
+  BalanceState,
+} from './services/arbitrage-service.js';
 
 // Trading
 export { TradingClient, POLYGON_MAINNET, POLYGON_AMOY } from './clients/trading-client.js';
@@ -176,9 +185,6 @@ export {
   ROUNDING_CONFIG,
 } from './utils/price-utils.js';
 export type { TickSize } from './utils/price-utils.js';
-
-// NOTE: ArbitrageService has been moved to @catalyst-team/arb package
-// See packages/arb/src/services/arbitrage-service.ts
 
 // NOTE: MCP tools have been moved to @catalyst-team/poly-mcp package
 // See packages/poly-mcp/
