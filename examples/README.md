@@ -31,6 +31,7 @@ pnpm example:smart-money # 02-smart-money.ts
 | 10 | `ctf-operations.ts` | Split/Merge/Redeem tokens | Yes |
 | 11 | `live-arbitrage-scan.ts` | Scan markets for arbitrage | No |
 | 12 | `trending-arb-monitor.ts` | Real-time arbitrage monitoring | No |
+| 13 | `arbitrage-service.ts` | Complete ArbitrageService workflow | Yes |
 
 ---
 
@@ -166,6 +167,20 @@ Continuous monitoring of trending markets.
 - Correct effective price calculation
 - Configurable scan intervals
 
+### 13 - ArbitrageService Complete Workflow
+
+Full arbitrage workflow using `ArbitrageService` (requires private key).
+
+```bash
+POLYMARKET_PRIVATE_KEY=0x... npx tsx examples/13-arbitrage-service.ts
+```
+
+- **ArbitrageService**: High-level API for arbitrage detection and execution
+- Market scanning with configurable criteria
+- Real-time WebSocket monitoring
+- Auto-execution with profit thresholds
+- Position clearing and settlement
+
 ---
 
 ## Arbitrage Concepts
@@ -192,6 +207,6 @@ effectiveSellNo = max(NO.bid, 1 - YES.ask)
 
 | Variable | Description | Required For |
 |----------|-------------|--------------|
-| `POLYMARKET_PRIVATE_KEY` | Private key for trading | 08, 09, 10 |
-| `SCAN_INTERVAL_MS` | Arb scan interval (ms) | 12 |
-| `PROFIT_THRESHOLD` | Min arb profit % | 11, 12 |
+| `POLYMARKET_PRIVATE_KEY` | Private key for trading | 08, 09, 10, 13 |
+| `SCAN_INTERVAL_MS` | Arb scan interval (ms) | 12, 13 |
+| `PROFIT_THRESHOLD` | Min arb profit % | 11, 12, 13 |
