@@ -114,31 +114,64 @@ export interface Trade {
   profileImageOptimized?: string;
 }
 
+/**
+ * Leaderboard entry from Polymarket Data API
+ *
+ * @see https://docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings
+ *
+ * Note: API 只返回 rank, proxyWallet, userName, vol, pnl, profileImage, xUsername, verifiedBadge
+ * positions 和 trades 字段 API 通常返回 null，需要调用 Profile API 获取详细数据
+ */
 export interface LeaderboardEntry {
-  // Wallet identifier (normalized from proxyWallet)
+  /** 钱包地址 (从 proxyWallet 标准化) */
   address: string;
 
-  // Ranking data
+  /** 排名 (从 string 转为 number) */
   rank: number;
+  /** 盈亏 (USDC) */
   pnl: number;
+  /** 交易量 (USDC, 从 vol 重命名) */
   volume: number;
 
-  // User profile (optional - may not exist)
+  /** 用户名 */
   userName?: string;
+  /** Twitter 用户名 */
   xUsername?: string;
+  /** 是否已验证 */
   verifiedBadge?: boolean;
+  /** 头像 URL */
   profileImage?: string;
 
-  // Activity counts (optional - API often returns null)
+  /** 持仓数量 (API 通常返回 null，需要 Profile API) */
   positions?: number;
+  /** 交易次数 (API 通常返回 null，需要 Profile API) */
   trades?: number;
 }
 
-export interface LeaderboardPage {
+/**
+ * Leaderboard result from Polymarket Data API
+ *
+ * @see https://docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings
+ *
+ * ## 设计说明
+ * Polymarket API 返回纯数组，不包含分页元数据 (无 total, offset, limit)。
+ * 本接口添加辅助字段以方便前端分页:
+ * - `hasMore`: 推断值，当 entries.length === request.limit 时为 true
+ * - `request`: 请求参数回显，方便计算页码
+ *
+ * ## 为什么不返回 total?
+ * 因为 API 不提供，我们不伪造。用 hasMore 来判断是否有下一页。
+ */
+export interface LeaderboardResult {
+  /** API 返回的排行榜条目 */
   entries: LeaderboardEntry[];
-  total: number;
-  offset: number;
-  limit: number;
+  /** 是否可能有更多数据 (entries.length === request.limit) */
+  hasMore: boolean;
+  /** 请求参数回显，方便前端分页计算 */
+  request: {
+    offset: number;
+    limit: number;
+  };
 }
 
 // ===== Leaderboard Parameters =====
@@ -658,10 +691,34 @@ export class DataApiClient {
   // ===== Leaderboard =====
 
   /**
-   * Get leaderboard page with time period and ordering support
+   * Fetch leaderboard entries from Polymarket Data API
+   *
+   * @see https://docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings
+   *
+   * ## API 返回字段
+   * 原始 API 只返回以下字段:
+   * - rank (string) - 排名
+   * - proxyWallet (string) - 钱包地址
+   * - userName (string) - 用户名
+   * - vol (number) - 交易量
+   * - pnl (number) - 盈亏
+   * - profileImage (string) - 头像 URL
+   * - xUsername (string | null) - Twitter 用户名
+   * - verifiedBadge (boolean) - 是否已验证
+   *
+   * ## API 不返回的字段
+   * 以下字段需要调用 Profile API 获取:
+   * - tradeCount, buyCount, sellCount
+   * - positionCount, winRate
+   * - unrealizedPnl (需要从 positions 计算)
+   *
+   * ## 分页说明
+   * - API 返回纯数组，无 total 字段
+   * - hasMore 是推断值: entries.length === limit 时为 true
+   * - request 是请求参数回显，方便前端分页
    *
    * @param params - Query parameters
-   * @param params.timePeriod - Time period: 'DAY', 'WEEK', 'MONTH', 'ALL' (default: 'ALL' for backward compatibility)
+   * @param params.timePeriod - Time period: 'DAY', 'WEEK', 'MONTH', 'ALL' (default: 'ALL')
    * @param params.orderBy - Order by: 'PNL', 'VOL' (default: 'PNL')
    * @param params.category - Category filter (default: 'OVERALL')
    * @param params.limit - Max entries per page (1-50, default: 50)
@@ -669,19 +726,19 @@ export class DataApiClient {
    *
    * @example
    * ```typescript
-   * // Get today's top traders by PnL
-   * const daily = await client.getLeaderboard({ timePeriod: 'DAY', orderBy: 'PNL' });
+   * // Get this week's top traders by PnL
+   * const result = await client.fetchLeaderboard({ timePeriod: 'WEEK', limit: 20 });
+   * console.log(result.entries);   // actual traders from API
+   * console.log(result.hasMore);   // true if may have more data
+   * console.log(result.request);   // { offset: 0, limit: 20 }
    *
-   * // Get this week's top traders by volume
-   * const weekly = await client.getLeaderboard({ timePeriod: 'WEEK', orderBy: 'VOL' });
-   *
-   * // Get politics category leaderboard
-   * const politics = await client.getLeaderboard({ category: 'POLITICS' });
+   * // Pagination
+   * const page2 = await client.fetchLeaderboard({ timePeriod: 'WEEK', limit: 20, offset: 20 });
    * ```
    */
-  async getLeaderboard(params?: LeaderboardParams): Promise<LeaderboardPage> {
+  async fetchLeaderboard(params?: LeaderboardParams): Promise<LeaderboardResult> {
     const {
-      timePeriod = 'ALL', // Default to ALL for backward compatibility
+      timePeriod = 'ALL',
       orderBy = 'PNL',
       category = 'OVERALL',
       limit = 50,
@@ -719,9 +776,8 @@ export class DataApiClient {
 
         return {
           entries,
-          total: entries.length + offset, // Approximate - API doesn't provide total
-          offset,
-          limit,
+          hasMore: entries.length === limit,
+          request: { offset, limit },
         };
       });
     });
@@ -736,9 +792,9 @@ export class DataApiClient {
     const limit = 50;
 
     while (all.length < maxEntries) {
-      const page = await this.getLeaderboard({ limit, offset });
-      all.push(...page.entries);
-      if (page.entries.length < limit) break;
+      const result = await this.fetchLeaderboard({ limit, offset });
+      all.push(...result.entries);
+      if (!result.hasMore) break;
       offset += limit;
     }
 

@@ -25,7 +25,7 @@ export type {
   Activity,
   Trade,
   LeaderboardEntry,
-  LeaderboardPage,
+  LeaderboardResult,
   // Leaderboard parameters (supports time period filtering)
   LeaderboardParams,
   LeaderboardTimePeriod,
@@ -87,6 +87,7 @@ export type {
   TimePeriod,
   LeaderboardSortBy,
   PeriodLeaderboardEntry,
+  PeriodLeaderboardResult,
   WalletPeriodStats,
   // PnL calculation types
   ParsedTrade,
@@ -95,6 +96,7 @@ export type {
 } from './services/wallet-service.js';
 
 export { MarketService, getIntervalMs as getIntervalMsService } from './services/market-service.js';
+export type { ResolvedMarketTokens } from './services/market-service.js';
 
 // Real-time (V2 - using official @polymarket/real-time-data-client)
 export { RealtimeServiceV2 } from './services/realtime-service-v2.js';
@@ -149,7 +151,11 @@ export type {
 } from './services/arbitrage-service.js';
 
 // SmartMoneyService - Smart Money detection and Copy Trading
-export { SmartMoneyService } from './services/smart-money-service.js';
+export {
+  SmartMoneyService,
+  categorizeMarket,
+  CATEGORY_KEYWORDS,
+} from './services/smart-money-service.js';
 export type {
   SmartMoneyWallet,
   SmartMoneyTrade,
@@ -160,9 +166,35 @@ export type {
   // Leaderboard & Report types
   LeaderboardOptions,
   SmartMoneyLeaderboardEntry,
+  SmartMoneyLeaderboardResult,
   PeriodRanking,
   WalletReport,
   WalletComparison,
+  // Report types (02-smart-money)
+  MarketCategory,
+  DailySummary,
+  CategoryStats,
+  TradeRecord,
+  PositionSummary,
+  ClosedMarketSummary,
+  DailyWalletReport,
+  DataRange,
+  PerformanceMetrics,
+  MarketStats,
+  TradingPatterns,
+  CurrentPositionsSummary,
+  WalletLifecycleReport,
+  PieSlice,
+  PieChartData,
+  BarItem,
+  BarChartData,
+  MonthlyPnLItem,
+  MonthlyPnLData,
+  ChartMetadata,
+  WalletChartData,
+  ReportProgressCallback,
+  LifecycleReportOptions,
+  TextReport,
 } from './services/smart-money-service.js';
 
 // DipArbService - Dip Arbitrage for 15m/5m UP/DOWN markets
@@ -414,7 +446,9 @@ export class PolymarketSDK {
     this.smartMoney = new SmartMoneyService(
       this.wallets,
       this.realtime,
-      this.tradingService
+      this.tradingService,
+      {},  // default config
+      this.dataApi  // pass dataApi for report generation
     );
 
     // Initialize DipArbService

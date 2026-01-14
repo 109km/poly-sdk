@@ -14,7 +14,7 @@ import {
   Position,
   Activity,
   LeaderboardEntry,
-  LeaderboardPage,
+  LeaderboardResult,
   LeaderboardTimePeriod,
   LeaderboardOrderBy,
   LeaderboardCategory,
@@ -110,6 +110,26 @@ export interface PeriodLeaderboardEntry {
   // 用户资料 (来自官方 API)
   userName?: string;
   profileImage?: string;
+  // 社交信息 (来自官方 API)
+  xUsername?: string;       // Twitter/X 用户名
+  verifiedBadge?: boolean;  // 是否已验证
+}
+
+/**
+ * Leaderboard result with proper semantics
+ *
+ * Note: Polymarket API doesn't return total count.
+ */
+export interface PeriodLeaderboardResult {
+  /** Leaderboard entries returned by the API */
+  entries: PeriodLeaderboardEntry[];
+  /** Whether there may be more entries (entries.length === request.limit) */
+  hasMore: boolean;
+  /** Echo of request parameters for pagination convenience */
+  request: {
+    offset: number;
+    limit: number;
+  };
 }
 
 export interface WalletPeriodStats {
@@ -351,16 +371,16 @@ export class WalletService {
   /**
    * Get leaderboard
    */
-  async getLeaderboard(page = 0, pageSize = 50): Promise<LeaderboardPage> {
-    return this.dataApi.getLeaderboard({ limit: pageSize, offset: page * pageSize });
+  async getLeaderboard(page = 0, pageSize = 50): Promise<LeaderboardResult> {
+    return this.dataApi.fetchLeaderboard({ limit: pageSize, offset: page * pageSize });
   }
 
   /**
    * Get top traders from leaderboard
    */
   async getTopTraders(limit = 10): Promise<LeaderboardEntry[]> {
-    const leaderboard = await this.dataApi.getLeaderboard({ limit });
-    return leaderboard.entries;
+    const result = await this.dataApi.fetchLeaderboard({ limit });
+    return result.entries;
   }
 
   // ===== Time-Based Leaderboard =====
@@ -413,7 +433,7 @@ export class WalletService {
     const orderBy = orderByMap[sortBy];
 
     // Use official API
-    const result = await this.dataApi.getLeaderboard({
+    const result = await this.dataApi.fetchLeaderboard({
       timePeriod,
       orderBy,
       category,
@@ -422,7 +442,7 @@ export class WalletService {
     });
 
     // Map to PeriodLeaderboardEntry format
-    return result.entries.map((entry, index) => ({
+    return result.entries.map((entry: LeaderboardEntry, index: number) => ({
       address: entry.address,
       rank: entry.rank || index + 1,
       volume: entry.volume,
@@ -443,6 +463,85 @@ export class WalletService {
       userName: entry.userName,
       profileImage: entry.profileImage,
     }));
+  }
+
+  /**
+   * Get leaderboard by time period with pagination info
+   *
+   * Same as getLeaderboardByPeriod but returns pagination metadata.
+   *
+   * @param period - Time period: 'day', 'week', 'month', or 'all'
+   * @param limit - Maximum entries to return (default: 50, max: 500)
+   * @param sortBy - Sort by 'pnl' or 'volume' (default: 'pnl')
+   * @param category - Market category filter (default: 'OVERALL')
+   * @param offset - Pagination offset (default: 0)
+   *
+   * @example
+   * ```typescript
+   * const result = await walletService.fetchLeaderboardByPeriod('week', 20, 'pnl', 'OVERALL', 0);
+   * console.log(`Showing ${result.entries.length}, hasMore: ${result.hasMore}`);
+   * ```
+   */
+  async fetchLeaderboardByPeriod(
+    period: TimePeriod,
+    limit = 50,
+    sortBy: LeaderboardSortBy = 'pnl',
+    category: LeaderboardCategory = 'OVERALL',
+    offset = 0
+  ): Promise<PeriodLeaderboardResult> {
+    // Map lowercase period to API's uppercase format
+    const timePeriodMap: Record<TimePeriod, LeaderboardTimePeriod> = {
+      day: 'DAY',
+      week: 'WEEK',
+      month: 'MONTH',
+      all: 'ALL',
+    };
+
+    // Map sortBy to API's orderBy format
+    const orderByMap: Record<LeaderboardSortBy, LeaderboardOrderBy> = {
+      volume: 'VOL',
+      pnl: 'PNL',
+    };
+
+    const timePeriod = timePeriodMap[period];
+    const orderBy = orderByMap[sortBy];
+
+    // Use official API with new fetchLeaderboard method
+    const result = await this.dataApi.fetchLeaderboard({
+      timePeriod,
+      orderBy,
+      category,
+      limit,
+      offset,
+    });
+
+    // Map to PeriodLeaderboardEntry format
+    const entries = result.entries.map((entry, index) => ({
+      address: entry.address,
+      rank: entry.rank || offset + index + 1,
+      volume: entry.volume,
+      pnl: entry.pnl,
+      totalPnl: entry.pnl,
+      realizedPnl: entry.pnl,
+      unrealizedPnl: 0,
+      tradeCount: entry.trades || 0,
+      buyCount: 0,
+      sellCount: 0,
+      buyVolume: 0,
+      sellVolume: 0,
+      makerVolume: 0,
+      takerVolume: 0,
+      userName: entry.userName,
+      profileImage: entry.profileImage,
+      xUsername: entry.xUsername,
+      verifiedBadge: entry.verifiedBadge,
+    }));
+
+    return {
+      entries,
+      hasMore: result.hasMore,
+      request: result.request,
+    };
   }
 
   /**
@@ -480,7 +579,7 @@ export class WalletService {
     const timePeriod = timePeriodMap[period];
 
     // Use official API with user filter
-    const result = await this.dataApi.getLeaderboard({
+    const result = await this.dataApi.fetchLeaderboard({
       timePeriod,
       orderBy: 'PNL',
       category,

@@ -18,16 +18,19 @@ describe('DataApiClient Integration', () => {
     client = new DataApiClient(new RateLimiter(), createUnifiedCache());
   });
 
-  describe('getLeaderboard', () => {
+  describe('fetchLeaderboard', () => {
     it('should fetch leaderboard entries', async () => {
-      const leaderboard = await client.getLeaderboard({ limit: 10 });
+      const result = await client.fetchLeaderboard({ limit: 10 });
 
-      expect(Array.isArray(leaderboard.entries)).toBe(true);
-      expect(leaderboard.entries.length).toBeGreaterThan(0);
-      expect(leaderboard.entries.length).toBeLessThanOrEqual(10);
+      expect(Array.isArray(result.entries)).toBe(true);
+      expect(result.entries.length).toBeGreaterThan(0);
+      expect(result.entries.length).toBeLessThanOrEqual(10);
+      expect(typeof result.hasMore).toBe('boolean');
+      expect(typeof result.request.offset).toBe('number');
+      expect(typeof result.request.limit).toBe('number');
 
       // Verify entry structure
-      for (const entry of leaderboard.entries) {
+      for (const entry of result.entries) {
         expect(typeof entry.address).toBe('string');
         expect(entry.address.length).toBeGreaterThan(0);
         expect(typeof entry.rank).toBe('number');
@@ -37,17 +40,17 @@ describe('DataApiClient Integration', () => {
       }
 
       // Verify ranks are in order
-      for (let i = 1; i < leaderboard.entries.length; i++) {
-        expect(leaderboard.entries[i].rank).toBeGreaterThan(leaderboard.entries[i - 1].rank);
+      for (let i = 1; i < result.entries.length; i++) {
+        expect(result.entries[i].rank).toBeGreaterThan(result.entries[i - 1].rank);
       }
 
-      console.log(`✓ Leaderboard fetched: ${leaderboard.entries.length} entries`);
-      console.log(`  #1: ${leaderboard.entries[0].address.slice(0, 10)}... PnL: $${leaderboard.entries[0].pnl.toLocaleString()}`);
+      console.log(`✓ Leaderboard fetched: ${result.entries.length} entries, hasMore: ${result.hasMore}`);
+      console.log(`  #1: ${result.entries[0].address.slice(0, 10)}... PnL: $${result.entries[0].pnl.toLocaleString()}`);
     }, 30000);
 
     it('should handle pagination', async () => {
-      const page1 = await client.getLeaderboard({ limit: 5, offset: 0 });
-      const page2 = await client.getLeaderboard({ limit: 5, offset: 5 });
+      const page1 = await client.fetchLeaderboard({ limit: 5, offset: 0 });
+      const page2 = await client.fetchLeaderboard({ limit: 5, offset: 5 });
 
       // Ranks should be continuous
       if (page1.entries.length > 0 && page2.entries.length > 0) {
@@ -117,14 +120,14 @@ describe('DataApiClient Integration', () => {
   describe('getPositions', () => {
     it('should fetch positions for a known active wallet', async () => {
       // Get top trader from leaderboard
-      const leaderboard = await client.getLeaderboard({ limit: 1 });
+      const result = await client.fetchLeaderboard({ limit: 1 });
 
-      if (leaderboard.entries.length === 0) {
+      if (result.entries.length === 0) {
         console.log('No leaderboard entries, skipping test');
         return;
       }
 
-      const address = leaderboard.entries[0].address;
+      const address = result.entries[0].address;
       const positions = await client.getPositions(address);
 
       expect(Array.isArray(positions)).toBe(true);
@@ -161,14 +164,14 @@ describe('DataApiClient Integration', () => {
   describe('getActivity', () => {
     it('should fetch activity for an active wallet', async () => {
       // Get top trader
-      const leaderboard = await client.getLeaderboard({ limit: 1 });
+      const result = await client.fetchLeaderboard({ limit: 1 });
 
-      if (leaderboard.entries.length === 0) {
+      if (result.entries.length === 0) {
         console.log('No leaderboard entries, skipping test');
         return;
       }
 
-      const address = leaderboard.entries[0].address;
+      const address = result.entries[0].address;
       const activity = await client.getActivity(address, { limit: 20 });
 
       expect(Array.isArray(activity)).toBe(true);

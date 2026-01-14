@@ -160,6 +160,29 @@ export interface MarketToken {
   winner?: boolean;
 }
 
+/**
+ * Resolved market tokens with outcome names
+ *
+ * Uses `primary`/`secondary` naming to be market-agnostic:
+ * - Yes/No markets: primary=Yes, secondary=No
+ * - Up/Down markets: primary=Up, secondary=Down
+ * - Team markets: primary=Team1, secondary=Team2
+ *
+ * This follows the BinaryTokens pattern in core/types.ts
+ */
+export interface ResolvedMarketTokens {
+  /** Primary outcome token ID (index 0: Yes/Up/Team1) */
+  primaryTokenId: string;
+  /** Secondary outcome token ID (index 1: No/Down/Team2) */
+  secondaryTokenId: string;
+  /** Outcome names for display [primary, secondary] */
+  outcomes: [string, string];
+  /** Primary outcome name (e.g., "Yes", "Up") */
+  primaryOutcome: string;
+  /** Secondary outcome name (e.g., "No", "Down") */
+  secondaryOutcome: string;
+}
+
 // ============================================================================
 // MarketService Implementation
 // ============================================================================
@@ -225,6 +248,66 @@ export class MarketService {
         }
       });
     });
+  }
+
+  /**
+   * Resolve market tokens from CLOB API
+   *
+   * This method fetches the actual token IDs from the CLOB API,
+   * which are different from the calculated positionIds in standard CTF.
+   *
+   * ## Why This Method Exists
+   *
+   * Polymarket CLOB markets use custom ERC-1155 token IDs that are different
+   * from the standard CTF calculated positionIds:
+   *
+   * ```
+   * Standard CTF:  positionId = keccak256(USDC + keccak256(0x0 + conditionId + indexSet))
+   * Polymarket:    tokenId = custom value from CLOB API (e.g., "25064375110792...")
+   * ```
+   *
+   * This method provides the actual tokenIds needed for CTF operations
+   * (split, merge, redeem) on Polymarket markets.
+   *
+   * ## Usage with CTFClient
+   *
+   * Since CTFClient uses legacy `yesTokenId`/`noTokenId` naming,
+   * you need to convert when calling CTF methods:
+   *
+   * ```typescript
+   * const resolved = await sdk.markets.resolveMarketTokens(conditionId);
+   * if (resolved) {
+   *   const tokenIds = {
+   *     yesTokenId: resolved.primaryTokenId,
+   *     noTokenId: resolved.secondaryTokenId,
+   *   };
+   *   await ctfClient.redeemByTokenIds(conditionId, tokenIds);
+   * }
+   * ```
+   *
+   * @param conditionId - Market condition ID (0x...)
+   * @returns Resolved token IDs with outcome names, or null if not found
+   */
+  async resolveMarketTokens(conditionId: string): Promise<ResolvedMarketTokens | null> {
+    try {
+      const market = await this.getClobMarket(conditionId);
+      if (!market?.tokens?.length || market.tokens.length < 2) {
+        return null;
+      }
+
+      const primary = market.tokens[0];
+      const secondary = market.tokens[1];
+
+      return {
+        primaryTokenId: primary.tokenId,
+        secondaryTokenId: secondary.tokenId,
+        outcomes: [primary.outcome, secondary.outcome],
+        primaryOutcome: primary.outcome,
+        secondaryOutcome: secondary.outcome,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**

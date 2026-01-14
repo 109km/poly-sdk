@@ -291,8 +291,11 @@ export class OnchainService {
    * Redeem winning tokens after market resolution (Standard CTF)
    *
    * WARNING: Use redeemByTokenIds for Polymarket CLOB markets.
+   *
+   * @param conditionId - Market condition ID
+   * @param outcome - Optional: Specific outcome to redeem (e.g., "YES", "UP", "TEAM A")
    */
-  async redeem(conditionId: string, outcome?: 'YES' | 'NO'): Promise<RedeemResult> {
+  async redeem(conditionId: string, outcome?: string): Promise<RedeemResult> {
     return this.ctfClient.redeem(conditionId, outcome);
   }
 
@@ -300,11 +303,16 @@ export class OnchainService {
    * Redeem winning tokens using Polymarket token IDs (Polymarket CLOB)
    *
    * This is the correct method for Polymarket CLOB markets.
+   * Supports dynamic outcome names (YES/NO, UP/DOWN, TEAM A/B, etc.)
+   *
+   * @param conditionId - Market condition ID
+   * @param tokenIds - Token IDs for primary and secondary outcomes
+   * @param outcome - Optional: Specific outcome to redeem (e.g., "YES", "UP", "TEAM A")
    */
   async redeemByTokenIds(
     conditionId: string,
     tokenIds: TokenIds,
-    outcome?: 'YES' | 'NO'
+    outcome?: string
   ): Promise<RedeemResult> {
     return this.ctfClient.redeemByTokenIds(conditionId, tokenIds, outcome);
   }
